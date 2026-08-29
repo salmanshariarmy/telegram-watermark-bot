@@ -1,0 +1,18 @@
+services:
+
+  watermark-bot:
+    build: .
+
+    container_name: telegram-watermark-bot
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    ports:
+      - "8080:8080"
+
+    volumes:
+      - ./downloads:/app/downloads
+      - ./outputs:/app/outputs
