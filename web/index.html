@@ -1,396 +1,642 @@
 <!DOCTYPE html>
-<html lang="en">
+
+<html>
+
 <head>
-    <meta charset="UTF-8">
 
-    <meta
-        name="viewport"
-        content="width=device-width,
-                 initial-scale=1,
-                 maximum-scale=1"
-    >
+<meta charset="UTF-8">
 
-    <title>Watermark Selector</title>
+<meta
+    name="viewport"
+    content="width=device-width,
+             initial-scale=1,
+             maximum-scale=1,
+             user-scalable=no"
+>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>CleanMedia</title>
 
-    <style>
-        * {
-            box-sizing: border-box;
-        }
+<style>
 
-        body {
-            margin: 0;
-            background: #111827;
-            color: white;
-            font-family: Arial, sans-serif;
-            min-height: 100vh;
-        }
+* {
+    box-sizing: border-box;
+}
 
-        .header {
-            padding: 18px;
-            text-align: center;
-        }
+body {
 
-        .header h2 {
-            margin: 0 0 6px;
-        }
+    margin: 0;
 
-        .header p {
-            margin: 0;
-            color: #9ca3af;
-            font-size: 14px;
-        }
+    background: #111827;
 
-        .container {
-            padding: 10px;
-        }
+    color: white;
 
-        .canvas-container {
-            position: relative;
-            width: 100%;
-            max-width: 900px;
-            margin: auto;
-            overflow: hidden;
-            background: #000;
-            border-radius: 12px;
-            touch-action: none;
-        }
+    font-family:
+        Arial,
+        sans-serif;
+}
 
-        #preview {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
+.header {
 
-        #selection {
-            position: absolute;
-            display: none;
+    padding: 15px;
 
-            border: 3px solid #22c55e;
-            background: rgba(34, 197, 94, 0.20);
+    text-align: center;
+}
 
-            pointer-events: none;
-        }
+.header h2 {
 
-        .controls {
-            max-width: 900px;
-            margin: 15px auto;
-        }
+    margin: 0 0 6px;
+}
 
-        button {
-            width: 100%;
-            padding: 15px;
-            border: 0;
-            border-radius: 10px;
+.header p {
 
-            background: #22c55e;
-            color: white;
+    margin: 0;
 
-            font-size: 17px;
-            font-weight: bold;
+    color: #9ca3af;
+}
 
-            cursor: pointer;
-        }
+#area {
 
-        button:disabled {
-            opacity: 0.4;
-        }
+    position: relative;
 
-        #coordinates {
-            text-align: center;
-            color: #9ca3af;
-            margin: 10px;
-            font-size: 13px;
-        }
-    </style>
+    width: 95%;
+
+    max-width: 900px;
+
+    margin: 10px auto;
+
+    overflow: hidden;
+
+    background: black;
+
+    border-radius: 10px;
+
+    touch-action: none;
+}
+
+#preview {
+
+    display: block;
+
+    width: 100%;
+
+    height: auto;
+
+    user-select: none;
+
+    -webkit-user-drag: none;
+}
+
+#box {
+
+    position: absolute;
+
+    display: none;
+
+    border: 3px solid #22c55e;
+
+    background:
+        rgba(34, 197, 94, 0.25);
+
+    pointer-events: none;
+}
+
+#status {
+
+    text-align: center;
+
+    padding: 12px;
+
+    color: #d1d5db;
+}
+
+button {
+
+    display: block;
+
+    width: 90%;
+
+    max-width: 500px;
+
+    margin: 10px auto 25px;
+
+    padding: 15px;
+
+    border: 0;
+
+    border-radius: 10px;
+
+    background: #22c55e;
+
+    color: white;
+
+    font-size: 17px;
+
+    font-weight: bold;
+}
+
+button:disabled {
+
+    opacity: 0.4;
+}
+
+</style>
+
 </head>
 
 <body>
 
+
 <div class="header">
-    <h2>🧹 Select Watermark</h2>
-    <p>Drag over your watermark</p>
+
+    <h2>🧹 CleanMedia</h2>
+
+    <p>
+        Draw a rectangle around your watermark
+    </p>
+
 </div>
 
-<div class="container">
 
-    <div
-        class="canvas-container"
-        id="canvasContainer"
+<div id="area">
+
+    <img
+        id="preview"
+        alt="Preview"
     >
-        <img
-            id="preview"
-            src=""
-            alt="Preview"
-        >
 
-        <div id="selection"></div>
-    </div>
-
-    <div id="coordinates">
-        No area selected
-    </div>
-
-    <div class="controls">
-        <button
-            id="processButton"
-            disabled
-        >
-            Remove Watermark
-        </button>
-    </div>
+    <div id="box"></div>
 
 </div>
+
+
+<div id="status">
+    Loading...
+</div>
+
+
+<button
+    id="remove"
+    disabled
+>
+    Remove Watermark
+</button>
+
 
 <script>
-    const tg = window.Telegram.WebApp;
-
-    tg.ready();
-    tg.expand();
-
-    const preview =
-        document.getElementById("preview");
-
-    const selection =
-        document.getElementById("selection");
-
-    const container =
-        document.getElementById("canvasContainer");
-
-    const coordinates =
-        document.getElementById("coordinates");
-
-    const processButton =
-        document.getElementById("processButton");
-
-    let dragging = false;
-
-    let startX = 0;
-    let startY = 0;
-
-    let current = null;
-
-    /*
-     * We need a preview image.
-     *
-     * The bot file itself is not directly exposed
-     * to this webpage, so this version asks the
-     * browser to load a temporary URL.
-     *
-     * For production, replace this section with
-     * your own /preview endpoint.
-     */
-
-    const params =
-        new URLSearchParams(window.location.search);
-
-    const fileId =
-        params.get("file_id");
-
-    /*
-     * The selector can also work with an image URL
-     * supplied through your own server.
-     *
-     * Example:
-     *
-     * /preview/<file_id>
-     */
-
-    if (fileId) {
-        preview.src =
-            "/preview/" +
-            encodeURIComponent(fileId);
-    }
 
 
-    function pointerPosition(event) {
+const params =
+    new URLSearchParams(
+        window.location.search
+    );
 
-        const rect =
-            container.getBoundingClientRect();
 
-        let x =
-            event.clientX - rect.left;
+const fileId =
+    params.get("file_id");
 
-        let y =
-            event.clientY - rect.top;
 
-        x = Math.max(
-            0,
-            Math.min(x, rect.width)
-        );
+const preview =
+    document.getElementById(
+        "preview"
+    );
 
-        y = Math.max(
-            0,
-            Math.min(y, rect.height)
-        );
 
-        return {
+const area =
+    document.getElementById(
+        "area"
+    );
+
+
+const box =
+    document.getElementById(
+        "box"
+    );
+
+
+const status =
+    document.getElementById(
+        "status"
+    );
+
+
+const button =
+    document.getElementById(
+        "remove"
+    );
+
+
+let drawing = false;
+
+let startX = 0;
+
+let startY = 0;
+
+let selection = null;
+
+
+if (!fileId) {
+
+    status.innerText =
+        "❌ Missing file ID.";
+
+    throw new Error(
+        "Missing file_id"
+    );
+}
+
+
+preview.src =
+    "/preview/" +
+    encodeURIComponent(
+        fileId
+    );
+
+
+preview.onload = function() {
+
+    status.innerText =
+        "Draw a box around your watermark.";
+
+};
+
+
+preview.onerror = function() {
+
+    status.innerText =
+        "❌ Could not load preview.";
+
+};
+
+
+function getPosition(event) {
+
+    const rect =
+        area.getBoundingClientRect();
+
+
+    let x =
+        event.clientX -
+        rect.left;
+
+
+    let y =
+        event.clientY -
+        rect.top;
+
+
+    x = Math.max(
+        0,
+        Math.min(
             x,
-            y
-        };
+            rect.width
+        )
+    );
+
+
+    y = Math.max(
+        0,
+        Math.min(
+            y,
+            rect.height
+        )
+    );
+
+
+    return {
+        x: x,
+        y: y
+    };
+}
+
+
+area.addEventListener(
+    "pointerdown",
+    function(event) {
+
+        event.preventDefault();
+
+        drawing = true;
+
+        area.setPointerCapture(
+            event.pointerId
+        );
+
+
+        const p =
+            getPosition(event);
+
+
+        startX = p.x;
+
+        startY = p.y;
+
+
+        box.style.display =
+            "block";
+
+
+        box.style.left =
+            startX + "px";
+
+
+        box.style.top =
+            startY + "px";
+
+
+        box.style.width =
+            "0px";
+
+
+        box.style.height =
+            "0px";
+
+
+        selection = null;
+
+        button.disabled = true;
+
     }
+);
 
 
-    container.addEventListener(
-        "pointerdown",
-        event => {
+area.addEventListener(
+    "pointermove",
+    function(event) {
 
-            event.preventDefault();
-
-            dragging = true;
-
-            const pos =
-                pointerPosition(event);
-
-            startX = pos.x;
-            startY = pos.y;
-
-            selection.style.display =
-                "block";
-
-            selection.style.left =
-                startX + "px";
-
-            selection.style.top =
-                startY + "px";
-
-            selection.style.width =
-                "0px";
-
-            selection.style.height =
-                "0px";
-        }
-    );
+        if (!drawing)
+            return;
 
 
-    container.addEventListener(
-        "pointermove",
-        event => {
-
-            if (!dragging)
-                return;
-
-            event.preventDefault();
-
-            const pos =
-                pointerPosition(event);
-
-            const left =
-                Math.min(
-                    startX,
-                    pos.x
-                );
-
-            const top =
-                Math.min(
-                    startY,
-                    pos.y
-                );
-
-            const width =
-                Math.abs(
-                    pos.x - startX
-                );
-
-            const height =
-                Math.abs(
-                    pos.y - startY
-                );
-
-            selection.style.left =
-                left + "px";
-
-            selection.style.top =
-                top + "px";
-
-            selection.style.width =
-                width + "px";
-
-            selection.style.height =
-                height + "px";
-
-            current = {
-                left,
-                top,
-                width,
-                height
-            };
-
-            coordinates.textContent =
-                `Selected: ${Math.round(width)} × ${Math.round(height)}`;
-
-            processButton.disabled =
-                width < 5 ||
-                height < 5;
-        }
-    );
+        event.preventDefault();
 
 
-    container.addEventListener(
-        "pointerup",
-        event => {
-            dragging = false;
-        }
-    );
+        const p =
+            getPosition(event);
 
 
-    processButton.addEventListener(
-        "click",
-        () => {
-
-            if (!current)
-                return;
-
-            /*
-             * Convert preview/display coordinates
-             * to original image coordinates.
-             */
-
-            const scaleX =
-                preview.naturalWidth /
-                preview.clientWidth;
-
-            const scaleY =
-                preview.naturalHeight /
-                preview.clientHeight;
-
-            const x =
-                Math.round(
-                    current.left * scaleX
-                );
-
-            const y =
-                Math.round(
-                    current.top * scaleY
-                );
-
-            const width =
-                Math.round(
-                    current.width * scaleX
-                );
-
-            const height =
-                Math.round(
-                    current.height * scaleY
-                );
-
-            const data = {
-                file_id: fileId,
-                x,
-                y,
-                width,
-                height
-            };
-
-            tg.sendData(
-                JSON.stringify(data)
+        const left =
+            Math.min(
+                startX,
+                p.x
             );
 
-            tg.close();
+
+        const top =
+            Math.min(
+                startY,
+                p.y
+            );
+
+
+        const width =
+            Math.abs(
+                p.x -
+                startX
+            );
+
+
+        const height =
+            Math.abs(
+                p.y -
+                startY
+            );
+
+
+        box.style.left =
+            left + "px";
+
+
+        box.style.top =
+            top + "px";
+
+
+        box.style.width =
+            width + "px";
+
+
+        box.style.height =
+            height + "px";
+
+
+        selection = {
+
+            left: left,
+
+            top: top,
+
+            width: width,
+
+            height: height
+
+        };
+
+
+        if (
+            width > 5 &&
+            height > 5
+        ) {
+
+            button.disabled =
+                false;
+
+            status.innerText =
+                "Watermark selected.";
+
         }
-    );
+
+    }
+);
+
+
+area.addEventListener(
+    "pointerup",
+    function(event) {
+
+        drawing = false;
+
+        try {
+
+            area.releasePointerCapture(
+                event.pointerId
+            );
+
+        } catch (e) {}
+
+    }
+);
+
+
+button.addEventListener(
+    "click",
+    async function() {
+
+        if (!selection)
+            return;
+
+
+        button.disabled = true;
+
+
+        status.innerText =
+            "⏳ Removing watermark...";
+
+
+        /*
+         * Convert screen coordinates
+         * into original media coordinates.
+         */
+
+        const scaleX =
+            preview.naturalWidth /
+            preview.clientWidth;
+
+
+        const scaleY =
+            preview.naturalHeight /
+            preview.clientHeight;
+
+
+        const x =
+            Math.round(
+                selection.left *
+                scaleX
+            );
+
+
+        const y =
+            Math.round(
+                selection.top *
+                scaleY
+            );
+
+
+        const width =
+            Math.round(
+                selection.width *
+                scaleX
+            );
+
+
+        const height =
+            Math.round(
+                selection.height *
+                scaleY
+            );
+
+
+        const requestData = {
+
+            file_id: fileId,
+
+            x: x,
+
+            y: y,
+
+            width: width,
+
+            height: height
+
+        };
+
+
+        console.log(
+            "Sending:",
+            requestData
+        );
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/process",
+                    {
+
+                        method: "POST",
+
+                        headers: {
+
+                            "Content-Type":
+                                "application/json"
+
+                        },
+
+                        body:
+                            JSON.stringify(
+                                requestData
+                            )
+
+                    }
+                );
+
+
+            const text =
+                await response.text();
+
+
+            console.log(
+                "Server response:",
+                text
+            );
+
+
+            let result;
+
+
+            try {
+
+                result =
+                    JSON.parse(text);
+
+            } catch (e) {
+
+                throw new Error(
+                    "Server returned invalid response."
+                );
+
+            }
+
+
+            if (
+                !response.ok ||
+                !result.success
+            ) {
+
+                throw new Error(
+                    result.error ||
+                    "Processing failed."
+                );
+
+            }
+
+
+            status.innerText =
+                "✅ Done! Check Telegram for your cleaned file.";
+
+        }
+        catch (error) {
+
+            console.error(
+                "Processing error:",
+                error
+            );
+
+
+            status.innerText =
+                "❌ " +
+                error.message;
+
+
+            button.disabled =
+                false;
+
+        }
+
+    }
+);
+
 </script>
 
 </body>
+
 </html>
