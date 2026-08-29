@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width,
+                 initial-scale=1,
+                 maximum-scale=1"
+    >
+
+    <title>Watermark Selector</title>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #111827;
+            color: white;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        .header {
+            padding: 18px;
+            text-align: center;
+        }
+
+        .header h2 {
+            margin: 0 0 6px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        .container {
+            padding: 10px;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin: auto;
+            overflow: hidden;
+            background: #000;
+            border-radius: 12px;
+            touch-action: none;
+        }
+
+        #preview {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        #selection {
+            position: absolute;
+            display: none;
+
+            border: 3px solid #22c55e;
+            background: rgba(34, 197, 94, 0.20);
+
+            pointer-events: none;
+        }
+
+        .controls {
+            max-width: 900px;
+            margin: 15px auto;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            border: 0;
+            border-radius: 10px;
+
+            background: #22c55e;
+            color: white;
+
+            font-size: 17px;
+            font-weight: bold;
+
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+        }
+
+        #coordinates {
+            text-align: center;
+            color: #9ca3af;
+            margin: 10px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h2>🧹 Select Watermark</h2>
+    <p>Drag over your watermark</p>
+</div>
+
+<div class="container">
+
+    <div
+        class="canvas-container"
+        id="canvasContainer"
+    >
+        <img
+            id="preview"
+            src=""
+            alt="Preview"
+        >
+
+        <div id="selection"></div>
+    </div>
+
+    <div id="coordinates">
+        No area selected
+    </div>
+
+    <div class="controls">
+        <button
+            id="processButton"
+            disabled
+        >
+            Remove Watermark
+        </button>
+    </div>
+
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+
+    tg.ready();
+    tg.expand();
+
+    const preview =
+        document.getElementById("preview");
+
+    const selection =
+        document.getElementById("selection");
+
+    const container =
+        document.getElementById("canvasContainer");
+
+    const coordinates =
+        document.getElementById("coordinates");
+
+    const processButton =
+        document.getElementById("processButton");
+
+    let dragging = false;
+
+    let startX = 0;
+    let startY = 0;
+
+    let current = null;
+
+    /*
+     * We need a preview image.
+     *
+     * The bot file itself is not directly exposed
+     * to this webpage, so this version asks the
+     * browser to load a temporary URL.
+     *
+     * For production, replace this section with
+     * your own /preview endpoint.
+     */
+
+    const params =
+        new URLSearchParams(window.location.search);
+
+    const fileId =
+        params.get("file_id");
+
+    /*
+     * The selector can also work with an image URL
+     * supplied through your own server.
+     *
+     * Example:
+     *
+     * /preview/<file_id>
+     */
+
+    if (fileId) {
+        preview.src =
+            "/preview/" +
+            encodeURIComponent(fileId);
+    }
+
+
+    function pointerPosition(event) {
+
+        const rect =
+            container.getBoundingClientRect();
+
+        let x =
+            event.clientX - rect.left;
+
+        let y =
+            event.clientY - rect.top;
+
+        x = Math.max(
+            0,
+            Math.min(x, rect.width)
+        );
+
+        y = Math.max(
+            0,
+            Math.min(y, rect.height)
+        );
+
+        return {
+            x,
+            y
+        };
+    }
+
+
+    container.addEventListener(
+        "pointerdown",
+        event => {
+
+            event.preventDefault();
+
+            dragging = true;
+
+            const pos =
+                pointerPosition(event);
+
+            startX = pos.x;
+            startY = pos.y;
+
+            selection.style.display =
+                "block";
+
+            selection.style.left =
+                startX + "px";
+
+            selection.style.top =
+                startY + "px";
+
+            selection.style.width =
+                "0px";
+
+            selection.style.height =
+                "0px";
+        }
+    );
+
+
+    container.addEventListener(
+        "pointermove",
+        event => {
+
+            if (!dragging)
+                return;
+
+            event.preventDefault();
+
+            const pos =
+                pointerPosition(event);
+
+            const left =
+                Math.min(
+                    startX,
+                    pos.x
+                );
+
+            const top =
+                Math.min(
+                    startY,
+                    pos.y
+                );
+
+            const width =
+                Math.abs(
+                    pos.x - startX
+                );
+
+            const height =
+                Math.abs(
+                    pos.y - startY
+                );
+
+            selection.style.left =
+                left + "px";
+
+            selection.style.top =
+                top + "px";
+
+            selection.style.width =
+                width + "px";
+
+            selection.style.height =
+                height + "px";
+
+            current = {
+                left,
+                top,
+                width,
+                height
+            };
+
+            coordinates.textContent =
+                `Selected: ${Math.round(width)} × ${Math.round(height)}`;
+
+            processButton.disabled =
+                width < 5 ||
+                height < 5;
+        }
+    );
+
+
+    container.addEventListener(
+        "pointerup",
+        event => {
+            dragging = false;
+        }
+    );
+
+
+    processButton.addEventListener(
+        "click",
+        () => {
+
+            if (!current)
+                return;
+
+            /*
+             * Convert preview/display coordinates
+             * to original image coordinates.
+             */
+
+            const scaleX =
+                preview.naturalWidth /
+                preview.clientWidth;
+
+            const scaleY =
+                preview.naturalHeight /
+                preview.clientHeight;
+
+            const x =
+                Math.round(
+                    current.left * scaleX
+                );
+
+            const y =
+                Math.round(
+                    current.top * scaleY
+                );
+
+            const width =
+                Math.round(
+                    current.width * scaleX
+                );
+
+            const height =
+                Math.round(
+                    current.height * scaleY
+                );
+
+            const data = {
+                file_id: fileId,
+                x,
+                y,
+                width,
+                height
+            };
+
+            tg.sendData(
+                JSON.stringify(data)
+            );
+
+            tg.close();
+        }
+    );
+</script>
+
+</body>
+</html>
